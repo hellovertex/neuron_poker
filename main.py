@@ -114,12 +114,14 @@ class SelfPlay:
     def key_press_agents(self):
         """Create an environment with 6 key press agents"""
         from agents.agent_keypress import Player as KeyPressAgent
+        from agents.agent_consider_equity import Player as EquityPlayer
         env_name = 'neuron_poker-v0'
         num_of_plrs = 2
         self.env = gym.make(env_name, initial_stacks=self.stack, render=self.render)
-        for _ in range(num_of_plrs):
+        for _ in range(num_of_plrs-1):
             player = KeyPressAgent()
             self.env.add_player(player)
+        self.env.add_player(EquityPlayer(name='equity/50/50', min_call_equity=.5, min_bet_equity=-.5))
 
         self.env.reset()
 
@@ -148,7 +150,7 @@ class SelfPlay:
         print(league_table)
         print(f"Best Player: {best_player}")
 
-    def equity_self_improvement(self, improvement_rounds):
+    def equity_self_improvement(self, improvement_rounds, num_players=3):
         """Create 6 players, 4 of them equity based, 2 of them random"""
         from agents.agent_consider_equity import Player as EquityPlayer
         calling = [.1, .2, .3, .4, .5, .6]
@@ -157,7 +159,7 @@ class SelfPlay:
         for improvement_round in range(improvement_rounds):
             env_name = 'neuron_poker-v0'
             self.env = gym.make(env_name, initial_stacks=self.stack, render=self.render)
-            for i in range(6):
+            for i in range(num_players):
                 self.env.add_player(EquityPlayer(name=f'Equity/{calling[i]}/{betting[i]}',
                                                  min_call_equity=calling[i],
                                                  min_bet_equity=betting[i]))
@@ -252,4 +254,8 @@ class SelfPlay:
 
 
 if __name__ == '__main__':
-    command_line_parser()
+    # command_line_parser()
+    SelfPlay(render=False,
+             num_episodes=1,
+             use_cpp_montecarlo=False,
+             funds_plot=True).equity_self_improvement(10)  # .key_press_agents()

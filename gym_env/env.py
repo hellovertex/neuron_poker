@@ -13,6 +13,7 @@ from tools.hand_evaluator import get_winner
 from tools.helper import flatten
 
 # pylint: disable=import-outside-toplevel
+from typing import List
 
 log = logging.getLogger(__name__)
 
@@ -194,6 +195,8 @@ class HoldemTable(Env):
         # until either the env id sone, or an agent is just a shell and
         # and will get a call from to the step function externally (e.g. via
         # keras-rl
+
+
         self.reward = 0
         self.acting_agent = self.player_cycle.idx
         if self._agent_is_autoplay():
@@ -202,6 +205,8 @@ class HoldemTable(Env):
                 self._get_environment()
                 # call agent's action method
                 action = self.current_player.agent_obj.action(self.legal_moves, self.observation, self.info)
+                logging.warning(
+                    f'player: {self.player_cycle.idx}, action: {action if action == "initial_player_autoplay" else Action(action)}')
                 if Action(action) not in self.legal_moves:
                     self._illegal_move(action)
                 else:
@@ -610,6 +615,7 @@ class HoldemTable(Env):
             return
 
     def _get_legal_moves(self):
+        # todo depends on max_raising_rounds -> implement that
         """Determine what moves are allowed in the current state"""
         self.legal_moves = []
         if self.player_pots[self.current_player.seat] == max(self.player_pots):
@@ -617,7 +623,11 @@ class HoldemTable(Env):
         else:
             self.legal_moves.append(Action.CALL)
             self.legal_moves.append(Action.FOLD)
-
+        # todo
+        # if self.raising_round >= self.max_raising_rounds:
+        #     return
+        # if self.player_cycle.is_raising_allowed():
+        # check if _get_legal_moves is called before .is_raising_allowed() is synced
         if self.current_player.stack >= 3 * self.big_blind - self.player_pots[self.current_player.seat]:
             self.legal_moves.append(Action.RAISE_3BB)
 
@@ -733,9 +743,9 @@ class PlayerCycle:
     """Handle the circularity of the Table."""
 
     def __init__(self, lst, start_idx=0, dealer_idx=0, max_steps_total=None,
-                 last_raiser_step=None, max_steps_after_raiser=None, max_steps_after_big_blind=None):
+                 last_raiser_step=None, max_steps_after_raiser=None, max_steps_after_big_blind=None, max_raising_rounds=2):
         """Cycle over a list"""
-        self.lst = lst
+        self.lst: List[PlayerShell] = lst
         self.start_idx = start_idx
         self.size = len(lst)
         self.max_steps_total = max_steps_total
@@ -754,6 +764,7 @@ class PlayerCycle:
         self.new_hand_reset()
         self.checkers = 0
         self.folder = None
+        self.max_raising_rounds = max_raising_rounds
 
     def new_hand_reset(self):
         """Reset state if a new hand is dealt"""
@@ -769,6 +780,7 @@ class PlayerCycle:
         self.second_round = False
         self.idx = self.dealer_idx
         self.last_raiser_step = len(self.lst)
+        # todo self.last_raiser_step = len(self.lst) * self.max_raising_rounds
         self.checkers = 0
 
     def next_player(self, step=1):
@@ -862,8 +874,9 @@ class PlayerCycle:
 
     def mark_bb(self):
         """Ensure bb can raise"""
-        self.last_raiser_step = self.step_counter + len(self.lst)
-        self.max_steps_total = self.step_counter + len(self.lst) * 2
+        # todo max_steps_total is being correctly set inside _initiate_round
+        self.last_raiser_step = self.step_counter + len(self.lst)  # todo * self.max_raising_rounds
+        self.max_steps_total = self.step_counter + len(self.lst) * 2  # todo * self.max_raising_rounds
 
     def is_raising_allowed(self):
         """Check if raising is still allowed at this position"""
